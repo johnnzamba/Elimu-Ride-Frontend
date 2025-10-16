@@ -1,0 +1,626 @@
+"use client";
+
+import React, { useEffect, useState } from 'react';
+import { Link, useParams } from 'waku';
+
+type BusDetails = {
+  asset_no: string;
+  bus_no: string;
+  item_code: string;
+  company: string;
+  purchase_date: string;
+  available_for_use_date: string;
+  purchase_amount: number;
+  gross_purchase_amount: number;
+  asset_quantity: number;
+  policy_number: string;
+  insurer: string;
+  insured_value: string;
+  maintenance_scheduled: boolean;
+  docstatus: number;
+  image: string;
+  image_url: string;
+};
+
+type ApiResponse = {
+  message: {
+    status: number;
+    message: string;
+    result: BusDetails;
+  };
+};
+
+type Colors = {
+  bgGradient: string;
+  cardBg: string;
+  textPrimary: string;
+  textMuted: string;
+  border: string;
+};
+
+function DrawerItem({ active, label, icon, colors, onClick, open }: { active?: boolean; label: string; icon: React.ReactNode; colors: Colors; onClick?: () => void; open?: boolean }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 12px', borderRadius: 10,
+        background: active ? 'rgba(46,125,50,0.12)' : 'transparent',
+        color: active ? '#2E7D32' : colors.textPrimary,
+        fontWeight: active ? 800 : 600,
+        cursor: 'pointer',
+        justifyContent: open ? 'flex-start' : 'center',
+      }}
+    >
+      <span aria-hidden>{icon}</span>
+      {open && <span>{label}</span>}
+    </div>
+  );
+}
+
+function BarChart({ data, colors }: { data: { label: string; value: number }[]; colors: Colors }) {
+  const maxValue = Math.max(...data.map(d => d.value));
+  
+  return (
+    <div style={{
+      background: colors.cardBg,
+      borderRadius: 16,
+      padding: 24,
+      boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+      border: `1px solid ${colors.border}`,
+    }}>
+      <h3 style={{ fontSize: 18, fontWeight: 800, color: colors.textPrimary, marginBottom: 20 }}>
+        📊 Purchase Overview
+      </h3>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'end', height: 200 }}>
+        {data.map((item, index) => (
+          <div key={index} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: '100%',
+              height: `${(item.value / maxValue) * 150}px`,
+              background: 'linear-gradient(180deg, #43A047, #66BB6A)',
+              borderRadius: '8px 8px 0 0',
+              display: 'flex',
+              alignItems: 'end',
+              justifyContent: 'center',
+              padding: '8px',
+              color: '#fff',
+              fontWeight: 600,
+              fontSize: 12,
+              transition: 'all 0.3s ease',
+            }}>
+              {item.value.toLocaleString()}
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: colors.textPrimary, textAlign: 'center' }}>
+              {item.label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DetailCard({ title, value, icon, colors }: { title: string; value: string | number; icon: string; colors: Colors }) {
+  return (
+    <div style={{
+      background: colors.cardBg,
+      borderRadius: 12,
+      padding: 20,
+      boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+      border: `1px solid ${colors.border}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        <span style={{ fontSize: 20 }}>{icon}</span>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: colors.textMuted, margin: 0 }}>
+          {title}
+        </h3>
+      </div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: colors.textPrimary }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ManageDropdown({ colors, onAction }: { colors: Colors; onAction: (action: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const actions = [
+    { label: 'Transfer Asset', icon: '🔄' },
+    { label: 'Scrap Asset', icon: '🗑️' },
+    { label: 'Sell Asset', icon: '💰' },
+    { label: 'Maintain Asset', icon: '🔧' },
+    { label: 'Repair Asset', icon: '🛠️' },
+    { label: 'Split Asset', icon: '✂️' },
+    { label: 'Adjust Asset Value', icon: '📊' },
+    { label: 'Create Depreciation Entry', icon: '📉' },
+  ];
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          padding: '12px 20px',
+          borderRadius: 8,
+          border: `1px solid ${colors.border}`,
+          background: colors.cardBg,
+          color: colors.textPrimary,
+          fontWeight: 600,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          transition: 'all 0.2s ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(46,125,50,0.1)';
+          e.currentTarget.style.borderColor = '#2E7D32';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = colors.cardBg;
+          e.currentTarget.style.borderColor = colors.border;
+        }}
+      >
+        Manage
+        <span style={{ fontSize: 12 }}>{isOpen ? '▲' : '▼'}</span>
+      </button>
+      
+      {isOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            marginTop: 8,
+            background: colors.cardBg,
+            borderRadius: 12,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+            border: `1px solid ${colors.border}`,
+            minWidth: 200,
+            zIndex: 50,
+          }}
+        >
+          {actions.map((action, index) => (
+            <button
+              key={index}
+              onClick={() => {
+                onAction(action.label);
+                setIsOpen(false);
+              }}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                border: 'none',
+                background: 'transparent',
+                color: colors.textPrimary,
+                textAlign: 'left',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                fontSize: 14,
+                fontWeight: 500,
+                transition: 'all 0.2s ease',
+                borderRadius: index === 0 ? '12px 12px 0 0' : index === actions.length - 1 ? '0 0 12px 12px' : '0',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(46,125,50,0.1)';
+                e.currentTarget.style.color = '#2E7D32';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = colors.textPrimary;
+              }}
+            >
+              <span>{action.icon}</span>
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function getApiBase(): string {
+  if (typeof window === 'undefined') return 'http://elimu.com:8000';
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  return isLocal ? '' : 'http://elimu.com:8000';
+}
+
+export default function BusDetailPage() {
+  const params = useParams();
+  const assetNo = params.asset_no as string;
+  const [bus, setBus] = useState<BusDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(true);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'light';
+    return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem('theme', theme); } catch {}
+  }, [theme]);
+
+  const colors: Colors = theme === 'light'
+    ? { bgGradient: 'linear-gradient(135deg, #E7F5EC 0%, #F8FBF8 50%, #F1FFF6 100%)', cardBg: '#fff', textPrimary: '#1f2a24', textMuted: 'rgba(0,0,0,0.6)', border: 'rgba(0,0,0,0.08)' }
+    : { bgGradient: '#0B1712', cardBg: '#142019', textPrimary: '#E7F5EC', textMuted: 'rgba(231,245,236,0.7)', border: 'rgba(255,255,255,0.12)' };
+
+  useEffect(() => {
+    const fetchBusDetails = async () => {
+      try {
+        setLoading(true);
+        
+        // Get the authorization token
+        let token = '';
+        try {
+          token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || '';
+        } catch {
+          // Ignore storage errors
+        }
+        
+        if (!token) {
+          window.location.href = '/';
+          return;
+        }
+
+        const base = getApiBase();
+        const url = `${base}/api/method/eagles_apis.apis.assets.get_bus_details`;
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            asset_name: assetNo
+          }),
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            try {
+              localStorage.removeItem('auth_token');
+              sessionStorage.removeItem('auth_token');
+            } catch {
+              // Ignore storage errors
+            }
+            window.location.href = '/';
+            return;
+          }
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data: ApiResponse = await response.json();
+        
+        if (data.message.status === 200) {
+          setBus(data.message.result);
+        } else {
+          throw new Error(data.message.message || 'Failed to fetch bus details');
+        }
+      } catch (err) {
+        console.error('Error fetching bus details:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch bus details');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (assetNo) {
+      fetchBusDetails();
+    }
+  }, [assetNo]);
+
+  const handleManageAction = (action: string) => {
+    alert(`${action} functionality coming soon!`);
+  };
+
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: colors.bgGradient,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: 20,
+      }}>
+        <title>Elimu Ride • Bus Details</title>
+        <div
+          style={{
+            width: 60,
+            height: 60,
+            borderRadius: '50%',
+            border: '4px solid rgba(46,125,50,0.2)',
+            borderTopColor: '#2E7D32',
+            animation: 'spin 1s linear infinite',
+          }}
+        />
+        <div style={{ fontSize: 18, fontWeight: 600, color: '#2E7D32' }}>
+          Loading bus details...
+        </div>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (error || !bus) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: colors.bgGradient,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: 20,
+        padding: 20,
+      }}>
+        <title>Elimu Ride • Bus Details</title>
+        <div style={{
+          background: colors.cardBg,
+          borderRadius: 16,
+          padding: 32,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+          textAlign: 'center',
+          maxWidth: 400,
+          border: `1px solid ${colors.border}`,
+        }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#E53935', marginBottom: 12 }}>
+            {error || 'Bus Not Found'}
+          </h2>
+          <p style={{ color: colors.textMuted, marginBottom: 20 }}>
+            {error || 'The requested bus could not be found.'}
+          </p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <button
+              onClick={() => window.history.back()}
+              style={{
+                padding: '12px 24px',
+                borderRadius: 8,
+                border: `1px solid #2E7D32`,
+                background: 'transparent',
+                color: '#2E7D32',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Go Back
+            </button>
+            <Link
+              to="/buses"
+              style={{
+                padding: '12px 24px',
+                borderRadius: 8,
+                border: 'none',
+                background: 'linear-gradient(90deg, #43A047, #66BB6A)',
+                color: '#fff',
+                fontWeight: 600,
+                textDecoration: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              View All Buses
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const chartData = [
+    { label: 'Purchase Amount', value: bus.purchase_amount },
+    { label: 'Gross Amount', value: bus.gross_purchase_amount },
+  ];
+
+  return (
+    <div style={{ minHeight: '100vh', background: colors.bgGradient, color: colors.textPrimary }}>
+      <title>Elimu Ride • {bus.bus_no}</title>
+      <div style={{ display: 'grid', gridTemplateColumns: open ? '240px 1fr' : '72px 1fr', transition: 'grid-template-columns 200ms ease' }}>
+        <aside style={{ position: 'sticky', top: 0, alignSelf: 'start', height: '100vh', padding: 16, background: theme === 'light' ? '#FFFFFFAA' : '#0E1A13', backdropFilter: theme === 'light' ? 'blur(6px)' : undefined, borderRight: `1px solid ${colors.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 10 }}>
+            <img src="/images/logo.png" alt="logo" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+            {open && <strong>Elimu Ride</strong>}
+            <button onClick={() => setOpen((v) => !v)} style={{ marginLeft: 'auto', background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: colors.textPrimary }}>{open ? '⟨' : '⟩'}</button>
+          </div>
+          <div style={{ height: 10 }} />
+          <nav style={{ display: 'grid', gap: 6 }}>
+            <DrawerItem colors={colors} label="Dashboard" icon={<span>📊</span>} onClick={() => window.location.href = '/home'} open={open} />
+            <DrawerItem colors={colors} label="Students" icon={<span>🎒</span>} open={open} />
+            <DrawerItem colors={colors} active label="Buses" icon={<span>🚌</span>} onClick={() => window.location.href = '/buses'} open={open} />
+            <DrawerItem colors={colors} label="Routes" icon={<span>🗺️</span>} open={open} />
+            <DrawerItem colors={colors} label="Pickups & Drop-offs" icon={<span>📍</span>} open={open} />
+            <DrawerItem colors={colors} label="Drivers" icon={<span>👨‍✈️</span>} open={open} />
+            <DrawerItem colors={colors} label="Attendance" icon={<span>🧾</span>} open={open} />
+            <DrawerItem colors={colors} label="Alerts" icon={<span>🔔</span>} open={open} />
+            <DrawerItem colors={colors} label="Settings" icon={<span>⚙️</span>} open={open} />
+          </nav>
+        </aside>
+        <main style={{ padding: 18 }}>
+          {/* Header */}
+          <div style={{
+            background: colors.cardBg,
+            borderRadius: 16,
+            padding: 24,
+            marginBottom: 24,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+            border: `1px solid ${colors.border}`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <Link
+                  to="/buses"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: `1px solid #2E7D32`,
+                    background: 'transparent',
+                    color: '#2E7D32',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                  }}
+                >
+                  ← Back to Buses
+                </Link>
+                <div>
+                  <h1 style={{ fontSize: 28, fontWeight: 900, color: colors.textPrimary, margin: 0 }}>
+                    {bus.bus_no}
+                  </h1>
+                  <p style={{ fontSize: 16, color: colors.textMuted, margin: '4px 0 0 0' }}>
+                    Asset: {bus.asset_no}
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: bus.maintenance_scheduled ? '#2E7D32' : '#E53935',
+                    background: bus.maintenance_scheduled 
+                      ? 'rgba(46,125,50,0.1)' 
+                      : 'rgba(229,57,53,0.1)',
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                  }}
+                >
+                  {bus.maintenance_scheduled ? '✓ Scheduled Maintenance' : '⚠ Maintenance Required'}
+                </span>
+                <ManageDropdown colors={colors} onAction={handleManageAction} />
+              </div>
+            </div>
+          </div>
+
+          {/* Bar Chart */}
+          <div style={{ marginBottom: 24 }}>
+            <BarChart data={chartData} colors={colors} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+            {/* Bus Image */}
+            <div style={{
+              background: colors.cardBg,
+              borderRadius: 16,
+              padding: 24,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+              border: `1px solid ${colors.border}`,
+            }}>
+              <h2 style={{ fontSize: 20, fontWeight: 800, color: colors.textPrimary, marginBottom: 16 }}>
+                Bus Image
+              </h2>
+              <div style={{
+                width: '100%',
+                height: 300,
+                borderRadius: 12,
+                overflow: 'hidden',
+                background: '#f5f5f5',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <img
+                  src={bus.image_url}
+                  alt={`Bus ${bus.bus_no}`}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                  onError={(e) => {
+                    const target = e.currentTarget as HTMLImageElement;
+                    target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0xMDAgMTAwSDIwMFYyMDBIMTAwVjEwMFoiIGZpbGw9IiM0M0EwNDciLz4KPHN2ZyB4PSIxMTAiIHk9IjExMCIgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMlM2LjQ4IDIyIDEyIDIyUzIyIDE3LjUyIDIyIDEyUzE3LjUyIDIgMTIgMloiIGZpbGw9IiNGRkZGRkYiLz4KPC9zdmc+Cjwvc3ZnPg==';
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Bus Details */}
+            <div style={{
+              background: colors.cardBg,
+              borderRadius: 16,
+              padding: 24,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+              border: `1px solid ${colors.border}`,
+            }}>
+              <h2 style={{ fontSize: 20, fontWeight: 800, color: colors.textPrimary, marginBottom: 20 }}>
+                Bus Information
+              </h2>
+              
+              <div style={{ display: 'grid', gap: 16 }}>
+                <DetailCard title="Asset Number" value={bus.asset_no} icon="🏷️" colors={colors} />
+                <DetailCard title="Bus Number" value={bus.bus_no} icon="🚌" colors={colors} />
+                <DetailCard title="Item Code" value={bus.item_code} icon="📋" colors={colors} />
+                <DetailCard title="Company" value={bus.company} icon="🏢" colors={colors} />
+                <DetailCard title="Insurer" value={bus.insurer} icon="🛡️" colors={colors} />
+                <DetailCard title="Policy Number" value={bus.policy_number} icon="📄" colors={colors} />
+              </div>
+            </div>
+          </div>
+
+          {/* Additional Details */}
+          <div style={{ marginTop: 24 }}>
+            <div style={{
+              background: colors.cardBg,
+              borderRadius: 16,
+              padding: 24,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+              border: `1px solid ${colors.border}`,
+            }}>
+              <h2 style={{ fontSize: 20, fontWeight: 800, color: colors.textPrimary, marginBottom: 20 }}>
+                Financial & Maintenance Details
+              </h2>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 16 }}>
+                <DetailCard 
+                  title="Purchase Amount" 
+                  value={`KSh ${bus.purchase_amount.toLocaleString()}`} 
+                  icon="💰" 
+                  colors={colors}
+                />
+                <DetailCard 
+                  title="Gross Purchase Amount" 
+                  value={`KSh ${bus.gross_purchase_amount.toLocaleString()}`} 
+                  icon="💵" 
+                  colors={colors}
+                />
+                <DetailCard 
+                  title="Insured Value" 
+                  value={`KSh ${bus.insured_value}`} 
+                  icon="🛡️" 
+                  colors={colors}
+                />
+                <DetailCard 
+                  title="Asset Quantity" 
+                  value={bus.asset_quantity} 
+                  icon="📦" 
+                  colors={colors}
+                />
+                <DetailCard 
+                  title="Purchase Date" 
+                  value={new Date(bus.purchase_date).toLocaleDateString()} 
+                  icon="📅" 
+                  colors={colors}
+                />
+                <DetailCard 
+                  title="Available Date" 
+                  value={new Date(bus.available_for_use_date).toLocaleDateString()} 
+                  icon="✅" 
+                  colors={colors}
+                />
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
